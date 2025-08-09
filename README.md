@@ -18,10 +18,10 @@ or built-in module
 isolate your project’s interpreter and dependencies, but they offer
 **no security or execution sandboxing** like a virtual machine or a Docker
 container would. Therefore, running virtualenv Python programs as-is (unsecured),
-**any [rogue dependency](https://www.google.com/search?q=malicious+python+packages&tbm=nws)
+**any [rogue dependency](https://www.google.com/search?q=malicious+python+packages&tbm=nws)\*
 🎯 or [hacked library code](https://www.google.com/search?q=(hacked+OR+hijacked+OR+backdoored+OR+"supply+chain+attack")+(npm+OR+pypi)&tbm=nws&num=100)
-🏴‍☠️ ([etc.](https://slsa.dev/spec/draft/threats-overview) ⚠)
-can wreak havoc, including access all your private parts** ‼
+:pirate_flag: ([etc.](https://slsa.dev/spec/draft/threats-overview) :warning:)
+can wreak havoc, including access all your private parts** :bangbang:
 (think current user's credentials and personal bits like
 `~/.ssh/id_ed25519`,
 `~/.pki/nssdb/`,
@@ -32,6 +32,9 @@ can wreak havoc, including access all your private parts** ‼
 > 
 > [No. Not in the slightest.](https://www.reddit.com/r/Python/comments/5sm6zm/using_virtualenv_is_more_secure/)
 
+＊ Installing something as seemingly harmless as the popular package _poetry_ pulls in
+[nearly a hundred dependencies or over 70 MB](doc/deps-stats.txt)
+of Python sources! 😬
 
 ### Solution
 
@@ -39,7 +42,7 @@ In order to execute installed Python programs in secure virtual environments,
 one is better advised to look to OS VM primitives like those supported by Docker
 and [containers](https://github.com/containers/), e.g.:
 ```shell
-podman run -it -v .:/src python:3 bash
+podman run -it -v .:/src python:3 bash  # ...
 ```
 The simpler alternative is **automatic lightweight container wrapping with
 [bubblewrap](https://github.com/containers/bubblewrap)** (of
@@ -89,7 +92,10 @@ sets up and transparently runs in a secure container sandbox.
 
 Other than the optional virtualenv dir, **all arguments initially passed to
 `sandbox-venv` are forwarded to bubblewrap**. See `bubblewrap --help` or
-[`man 1 bwrap`](https://manpages.debian.org/unstable/bwrap). 
+[`man 1 bwrap`](https://manpages.debian.org/unstable/bwrap).
+
+You can also pass additional bubblewrap arguments to individual
+process invocations via **`$BWRAP_ARGS` environment variable**.
 
 To run the sandboxed process as **superuser**
 (while still retaining all the security functionality of the container sandbox),
@@ -113,6 +119,20 @@ To mount extra endpoints,
 use Bubblewrap switches `--bind` or `--bind-ro`.
 
 
+### Runtime monitoring
+
+You can list bubblewraped processes using the command `lsns`
+or the following shell function:
+
+```sh
+list_bwrap () {
+    lsns -u -W | { IFS= read header; echo "$header"; grep bwrap; }
+}
+
+list_bwrap  # Function call
+```
+
+
 Viable alternatives
 -------------------
 1. A popular alternative are the aforementioned Docker/OCI containers
@@ -132,7 +152,7 @@ Viable alternatives
 4. On macOS, [`sandbox-exec`](https://igorstechnoclub.com/sandbox-exec/)
    or Apple Containerization®. 🤷
 
-In comparison, `sandbox-venv` like `chroot` on steroids
-uses the same isolation primitives that containers use
+In comparison, `sandbox-venv` is like `chroot` on steroids.
+It uses the same isolation primitives that containers use
 (process sandbox via Linux namespaces, isolated filesystem view),
 but without any of the container runtime baggage.

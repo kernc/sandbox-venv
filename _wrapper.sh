@@ -107,7 +107,7 @@ set $xtrace
 chdir="$(realpath --relative-to "$VENV/.." "$(pwd)")"
 chdir="$home/${chdir#"$(realpath "$VENV/..")"}"
 
-format_args () { for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; }
+format_args () ( set +x; for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; )
 warn "exec bwrap $(realpath "$VENV/bin/$EXECUTABLE") $(format_args "$@")"
 
 # NOTE: Pass $args last
