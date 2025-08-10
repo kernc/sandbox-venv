@@ -6,7 +6,6 @@ PS4="$(
     printf "\033[36;40;1m+%s${lineno:-}\033[0m " "$0"
 )"
 export PS4
-
 set -x
 
 "${0%/*}/build.sh"
