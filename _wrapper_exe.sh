@@ -1,5 +1,5 @@
 #!/bin/sh
-# sandbox-venv: container sandbox venv wrapper (GENERATED CODE)
+# sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
 set -eu
 set -x
 alias realpath='realpath --no-symlinks'

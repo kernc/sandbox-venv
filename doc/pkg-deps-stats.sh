@@ -25,10 +25,13 @@ wheel
 venv_dir=".sandbox-venv"
 trap "rm -rf '$venv_dir'" INT HUP TERM EXIT
 
-python -m venv "$venv_dir"
+/usr/bin/python -m venv "$venv_dir"
 sandbox-venv "$venv_dir" >&2
 . "$venv_dir/bin/activate"
-pip cache info | grep -q "/home/user"  # Assertion, not to run unsandboxed
+
+assert_is_sandboxed () { "$@" 2>&1 | grep -q 'sandbox-venv/wrapper: exec bwrap'; }
+
+assert_is_sandboxed pip debug
 
 printf "%-8s\t%s\t%s\n" "PACKAGE" "DEPS" "SIZE" | tee "${0%/*}/deps-stats.txt"
 

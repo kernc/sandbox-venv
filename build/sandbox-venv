@@ -20,8 +20,7 @@ cd "../.."  # I.e. the project dir
 venv="${venv##*/}"
 bin="$venv/bin"
 [ -d "$bin" ] || { warn 'Assertion failed'; exit 2; }
-this_script="$0"
-[ -f "$this_script" ] || this_script="$(command -v "$this_script")"
+this_script="$(command -v "$0")"
 [ -f "$this_script" ] || { warn 'Assertion failed'; exit 3; }
 
 is_python_shebang () {
@@ -30,52 +29,26 @@ is_python_shebang () {
 }
 is_already_wrapped () { head -n2 "$1" | grep -q '^# sandbox-venv'; }
 export_func () { awk "/^$1 \(\) {/,/^}|; }\$/" "$0"; }
+extract_segment () {
+    segment="$1"; shift
+    awk "/^# CUT HERE / { c++; next } c==$segment" "$this_script" |
+        sed -E -e "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|"
+}
 
 wrap_pip () {
-    cat >"$1" <<EOF
-#!/bin/sh
-# sandbox-venv: container sandbox venv wrapper (GENERATED CODE)
-# pip wrapper: Re-run sandbox-venv.sh after every pip invocation
-set -u
-alias realpath='realpath --no-symlinks'
-
-venv="\$(realpath "\${0%/*}/..")"
-
-BWRAP_ARGS="--bind \$venv \$venv" \
-    "\$venv/bin/.unsafe_${1##*/}" "\$@"
-pip_return_status=\$?
-
-$(export_func is_python_shebang)
-$(export_func is_already_wrapped)
-
-new_binaries="\$(
-    for file in "\$venv/bin"/*; do
-        [ -L "\$file" ] || [ ! -x "\$file" ] ||
-            is_already_wrapped "\$file" ||
-            is_python_shebang "\$file" ||
-            printf '%s\n' "\${file##*/}"
-    done)"
-
-if [ "\$new_binaries" ]; then
-    # Reset shebang to the one outside the sandbox
-    if [ "\$(command -v sandbox-venv)" ]; then
-        echo "sandbox-venv: New binaries found:\$new_binaries. Re-running sandbox-venv ..."
-        sandbox-venv "\$venv"
-    else echo "WARNING: sandbox-venv not in \\\$PATH. Cannot sandbox/patch new executables:\$new_binaries. Rerun sandbox-venv on this venv to stay secure."
-    fi
-fi
-
-exit \$pip_return_status
-EOF
+    out="$1"; shift
+    extract_segment 1 "$@" > "$out"
+    printf '%s\n%s\n' "$(export_func is_python_shebang)" "$(export_func is_already_wrapped)" |
+        sed -i -E '/^# \[\.\.\.\].*/{
+            r /dev/stdin
+            d
+        }' "$out"
 }
 
 wrap_executable () {
-    bin_file="$1" executable="$2"; shift 2
-    awk '/^# CUT HERE/{p=1; next} p' "$this_script" |
-        sed -E -e "s|^EXECUTABLE=.*|EXECUTABLE='${executable##*/}'|" \
-               -e "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|" \
-        > "$bin_file"
-    grep -q 'GENERATED CODE' "$bin_file"  # Assertion
+    out="$1" executable="$2"; shift 2
+    extract_segment 2 "$@" > "$out"
+    sed -i -E "s|^EXECUTABLE=.*|EXECUTABLE='${executable##*/}'|" "$out"
 }
 
 wrap_all () (
@@ -104,9 +77,47 @@ wrap_all () (
 wrap_all "$@"
 exit 0
 
-# CUT HERE ------------------------ Appendix I: sandbox-venv wrapper.sh script
+
+# CUT HERE ------------------- Appendix 1: sandbox-venv _wrapper_pip.sh script
 #!/bin/sh
-# sandbox-venv: container sandbox venv wrapper (GENERATED CODE)
+# sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
+# pip wrapper: Re-run sandbox-venv after every pip installation
+set -u
+alias realpath='realpath --no-symlinks'
+
+venv="$(realpath "${0%/*}/..")"
+
+_BWRAP_DEFAULT_ARGS=
+
+BWRAP_ARGS="${BWRAP_ARGS-} $_BWRAP_DEFAULT_ARGS --bind $venv $venv" \
+    "$venv/bin/.unsafe_${0##*/}" "$@"
+pip_return_status=$?
+
+# [...] Auxiliary functions get inserted here
+
+new_binaries="$(
+    for file in "$venv/bin"/*; do
+        [ -L "$file" ] || [ ! -x "$file" ] ||
+            is_already_wrapped "$file" ||
+            is_python_shebang "$file" ||
+            printf ' %s' "${file##*/}"
+    done)"
+
+if [ "$new_binaries" ]; then
+    # Reset shebang to the one outside the sandbox
+    if [ "$(command -v sandbox-venv)" ]; then
+        echo "sandbox-venv: New binaries found:$new_binaries. Re-running sandbox-venv ..."
+        sandbox-venv "$venv"
+    else echo "WARNING: sandbox-venv not in \$PATH. Cannot sandbox/patch new executables:$new_binaries. Rerun sandbox-venv on this venv to stay secure."
+    fi
+fi
+
+exit $pip_return_status
+
+
+# CUT HERE ------------------- Appendix 2: sandbox-venv _wrapper_exe.sh script
+#!/bin/sh
+# sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
 set -eu
 set -x
 alias realpath='realpath --no-symlinks'

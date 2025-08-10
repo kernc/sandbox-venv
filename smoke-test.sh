@@ -15,6 +15,7 @@ PATH="$(realpath "${0%/*}")/build:$PATH"
 LC_ALL=C
 
 tmpdir="$(mktemp -d -t sandbox-venv_test-XXXXXXX)"
+# shellcheck disable=SC2064
 trap "tree -a -L 4 --si --du '$tmpdir'; rm -fr '$tmpdir'; trap - INT HUP EXIT TERM" INT HUP TERM EXIT
 if [ ! "${CI-}" ]; then case "$tmpdir" in /tmp*|/var/*) ;; *) exit 9 ;; esac; fi
 cd "$tmpdir"
@@ -23,10 +24,10 @@ cd "$tmpdir"
 . .venv/bin/activate
 sandbox-venv .venv
 
-ensure_is_wrapped () { "$@" 2>&1 | grep -q 'sandbox-venv/wrapper: exec bwrap'; }
+assert_is_sandboxed () { "$@" 2>&1 | grep -q 'sandbox-venv/wrapper: exec bwrap'; }
 
-ensure_is_wrapped python -c 'import os'
-ensure_is_wrapped pip freeze
+assert_is_sandboxed python -c 'import os'
+assert_is_sandboxed pip freeze
 python -c 'import os; print(os.getcwd())'
 pip freeze --all
 pip freeze --all 2>&1 | grep -q '=='
