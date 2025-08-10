@@ -16,8 +16,7 @@ command -v bwrap >/dev/null || { warn 'Required command bwrap missing; apt insta
 venv='.venv'; [ $# -eq 0 ] || case "$1" in -*) ;; *) venv="$(realpath "$1")"; shift ;; esac
 
 cd "$venv/bin" || { warn 'Error: Missing venv. Make a venv: python -m venv .venv'; exit 1; }
-cd "../.."
-HOME="$(pwd)"  # I.e. the project dir
+cd "../.."  # I.e. the project dir
 venv="${venv##*/}"
 bin="$venv/bin"
 [ -d "$bin" ] || { warn 'Assertion failed'; exit 2; }
@@ -40,30 +39,25 @@ wrap_pip () {
 set -u
 alias realpath='realpath --no-symlinks'
 
-bin="\$(realpath --relative-to "\${0%/*}/../.." "\${0%/*}")"
-venv="\$(realpath "\$bin/..")"
-home='/home/user'
+venv="\$(realpath "\${0%/*}/..")"
 
-BWRAP_ARGS="--bind \$venv \$home/\${venv##*/}" \
-    "\$bin/.unsafe_${1##*/}" "\$@"
+BWRAP_ARGS="--bind \$venv \$venv" \
+    "\$venv/bin/.unsafe_${1##*/}" "\$@"
 pip_return_status=\$?
 
 $(export_func is_python_shebang)
 $(export_func is_already_wrapped)
 
 new_binaries="\$(
-    for file in "\$bin"/*; do
+    for file in "\$venv/bin"/*; do
         [ -L "\$file" ] || [ ! -x "\$file" ] ||
             is_already_wrapped "\$file" ||
             is_python_shebang "\$file" ||
-            printf ' %s' "\${file##*/}"
+            printf '%s\n' "\${file##*/}"
     done)"
 
 if [ "\$new_binaries" ]; then
     # Reset shebang to the one outside the sandbox
-    for exe in \$new_binaries; do
-        sed -i -e "1s|\$home/\${venv##*/}/bin/.unsafe_|\$venv/bin/|" "\$venv/bin/\$exe"
-    done
     if [ "\$(command -v sandbox-venv)" ]; then
         echo "sandbox-venv: New binaries found:\$new_binaries. Re-running sandbox-venv ..."
         sandbox-venv "\$venv"
@@ -78,8 +72,7 @@ EOF
 wrap_executable () {
     bin_file="$1" executable="$2"; shift 2
     awk '/^# CUT HERE/{p=1; next} p' "$this_script" |
-        sed -E \
-               -e "s|^EXECUTABLE=.*|EXECUTABLE='${executable##*/}'|" \
+        sed -E -e "s|^EXECUTABLE=.*|EXECUTABLE='${executable##*/}'|" \
                -e "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|" \
         > "$bin_file"
     grep -q 'GENERATED CODE' "$bin_file"  # Assertion

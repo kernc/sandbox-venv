@@ -11,7 +11,7 @@ set -x
 
 "${0%/*}/build.sh"
 
-PATH="$(readlink -f "${0%/*}")/build:$PATH"
+PATH="$(realpath "${0%/*}")/build:$PATH"
 LC_ALL=C
 
 tmpdir="$(mktemp -d -t sandbox-venv_test-XXXXXXX)"

@@ -5,13 +5,12 @@ set -x
 alias realpath='realpath --no-symlinks'
 warn () { echo "sandbox-venv/wrapper: $*" >&2; }
 
-VENV="$(realpath "${0%/*}/..")"
+venv="$(realpath "${0%/*}/..")"
+
 EXECUTABLE="${1:-/usr/bin/python}"
 _BWRAP_DEFAULT_ARGS=
 
-home='/home/user'
-
-[ -e "$VENV/bin/python" ]  # Assertion
+[ -e "$venv/bin/python" ]  # Assertion
 
 # Expose these binaries
 executables="
@@ -49,13 +48,11 @@ py_libs="
     "
 ro_bind_extra="
     /etc/resolv.conf
-    /usr/share/ca-certificates
+    /usr/share/ca-certificates*
     /etc/pki
     /etc/ssl
-    /usr/share/pki
+    /usr/share/pki*
     "
-filter_existing_paths() { for p in $1; do [ ! -e "$p" ] || echo "$p"; done; }
-ro_bind_extra="$(filter_existing_paths "$ro_bind_extra")"
 
 collect="
     $collect
@@ -73,6 +70,8 @@ collect="$(
         echo "$path"
     done |
     sort -u |
+    # If collected paths contain /foo/ and /foo/bar,
+    # keep only /foo since it covers both
     while IFS= read -r path; do
         case $path in "$prev"/*) continue;; esac
         echo "$path"; prev="$path"
@@ -81,21 +80,23 @@ collect="$(
 args=""; for path in $collect; do args="$args --ro-bind $path $path"; done
 
 # RW-bind project dir (dir that contains .venv)
-args="$args --bind $(realpath "$VENV/..") $home"
+proj_dir="$(realpath "$venv/..")"
+args="$args --bind $proj_dir $proj_dir"
 
 # but RO some dirs like .venv and git
 ro_bind_pwd_extra="
-    ${VENV##*/}
+    ${venv##*/}
     .git"
 for path in $ro_bind_pwd_extra; do
-    [ ! -e "$VENV/../$path" ] || args="$args --ro-bind $(realpath "$VENV/../$path") $home/$path"
+    [ ! -e "$proj_dir/$path" ] || args="$args --ro-bind $proj_dir/$path $proj_dir/$path"
 done
 
 # RW bind cache dir for downloads etc.
-pip_cache="${HOME:-"/home/$USER"}/.cache/pip"
-mkdir -p "$VENV/cache"
+home="${HOME:-"/home/$USER"}"
+pip_cache="$home/.cache/pip"
+mkdir -p "$venv/cache"
 mkdir -p "$pip_cache"
-args="$args --bind $VENV/cache $home/.cache"
+args="$args --bind $venv/cache $home/.cache"
 args="$args --bind $pip_cache $home/.cache/pip"
 
 # Pass our own redacted copy of env
@@ -104,20 +105,19 @@ for var in $(env | grep -E '^(USER|SHLVL|SHELL|TERM|LANG|LC_.*)$'); do
 done
 
 set $xtrace
-chdir="$(realpath --relative-to "$VENV/.." "$(pwd)")"
-chdir="$home/${chdir#"$(realpath "$VENV/..")"}"
 
 format_args () ( set +x; for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; )
-warn "exec bwrap $(realpath "$VENV/bin/$EXECUTABLE") $(format_args "$@")"
+warn "exec bwrap ${0%/*}/$EXECUTABLE $(format_args "$@")"
 
 # NOTE: Pass $args last
 # shellcheck disable=SC2086
 exec bwrap \
     --dir /tmp \
     --dir "/run/user/$(id -u)" \
+    --dir "$(pwd)" \
+    --chdir "$(pwd)" \
     --proc /proc \
     --dev /dev \
-    --chdir "$chdir" \
     --clearenv \
     --unshare-all \
     --share-net \
@@ -125,9 +125,9 @@ exec bwrap \
     --die-with-parent \
     --setenv PS1 '\u @ \h \$' \
     --setenv HOME "$home" \
-    --setenv USER "${home##*/}" \
-    --setenv VIRTUAL_ENV "$home/${VENV##*/}" \
+    --setenv USER "user" \
+    --setenv VIRTUAL_ENV "$venv" \
     $args \
     $_BWRAP_DEFAULT_ARGS \
     ${BWRAP_ARGS:-} \
-    "$home/${VENV##*/}/bin/$EXECUTABLE" "$@"
+    "${0%/*}/$EXECUTABLE" "$@"
