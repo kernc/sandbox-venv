@@ -25,24 +25,23 @@ this_script="$(command -v "$0")"
 
 is_python_shebang () {
     shebang_line="$(head -n1 "$1" | tr -d '\0')"
-    test "${shebang_line#\#!}" = "$(realpath "$bin/python")"
+    test "${shebang_line#\#!}" = "$(realpath "${1%/*}/python")"
 }
 is_already_wrapped () { head -n2 "$1" | grep -q '^# sandbox-venv'; }
 export_func () { awk "/^$1 \(\) {/,/^}|; }\$/" "$0"; }
 extract_segment () {
     segment="$1"; shift
     awk "/^# CUT HERE / { c++; next } c==$segment" "$this_script" |
-        sed -E -e "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|"
+        sed -E "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|"
 }
 
 wrap_pip () {
     out="$1"; shift
     extract_segment 1 "$@" > "$out"
     printf '%s\n%s\n' "$(export_func is_python_shebang)" "$(export_func is_already_wrapped)" |
-        sed -i -E '/^# \[\.\.\.\].*/{
+        sed -i -E '/^# AUX_FUNCS.*/{
             r /dev/stdin
-            d
-        }' "$out"
+            d}' "$out"
 }
 
 wrap_executable () {
@@ -83,17 +82,22 @@ exit 0
 # sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
 # pip wrapper: Re-run sandbox-venv after every pip installation
 set -u
+set -x
 alias realpath='realpath --no-symlinks'
 
 venv="$(realpath "${0%/*}/..")"
 
 _BWRAP_DEFAULT_ARGS=
 
-BWRAP_ARGS="${BWRAP_ARGS-} $_BWRAP_DEFAULT_ARGS --bind $venv $venv" \
+BWRAP_ARGS="$_BWRAP_DEFAULT_ARGS
+${BWRAP_ARGS-}
+--bind
+$venv
+$venv" \
     "$venv/bin/.unsafe_${0##*/}" "$@"
 pip_return_status=$?
 
-# [...] Auxiliary functions get inserted here
+# AUX_FUNCS: Auxiliary functions get inserted here
 
 new_binaries="$(
     for file in "$venv/bin"/*; do
@@ -119,7 +123,7 @@ exit $pip_return_status
 #!/bin/sh
 # sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
 set -eu
-set -x
+
 alias realpath='realpath --no-symlinks'
 warn () { echo "sandbox-venv/wrapper: $*" >&2; }
 
@@ -181,7 +185,9 @@ collect="
 # Use separate for-loop to expand globstar.
 prev="sandbox@"
 collect="$(
+    # Split only on newline
     for path in $collect; do
+        path="$(printf '%s' "$path" | sed -r 's/^ +//;s/ +$//')"
         [ -e "$path" ] ||
             # Don't warn for globstar paths as they are allowed to not match
             case "$path" in *\**) continue ;; *) warn "Warning: missing $path"; continue ;; esac
@@ -195,39 +201,44 @@ collect="$(
         echo "$path"; prev="$path"
     done)"
 
-args=""; for path in $collect; do args="$args --ro-bind $path $path"; done
+# Begins constructing args for bwrap, in reverse
+# (later args in command line override prior ones)
+IFS='
+'  # Split args only on newline
+set -- $_BWRAP_DEFAULT_ARGS ${BWRAP_ARGS:-} "${0%/*}/$EXECUTABLE" "$@"
+
+for path in $collect; do set -- --ro-bind "$path" "$path" "$@"; done
 
 # RW-bind project dir (dir that contains .venv)
+# but RO-bind some dirs like .venv and git
 proj_dir="$(realpath "$venv/..")"
-args="$args --bind $proj_dir $proj_dir"
-
-# but RO some dirs like .venv and git
 ro_bind_pwd_extra="
     ${venv##*/}
     .git"
 for path in $ro_bind_pwd_extra; do
-    [ ! -e "$proj_dir/$path" ] || args="$args --ro-bind $proj_dir/$path $proj_dir/$path"
+    [ ! -e "$proj_dir/$path" ] || set -- --ro-bind "$proj_dir/$path" "$proj_dir/$path" "$@"
 done
+set -- --bind "$proj_dir" "$proj_dir" "$@"
 
 # RW bind cache dir for downloads etc.
 home="${HOME:-"/home/$USER"}"
 pip_cache="$home/.cache/pip"
-mkdir -p "$venv/cache"
-mkdir -p "$pip_cache"
-args="$args --bind $venv/cache $home/.cache"
-args="$args --bind $pip_cache $home/.cache/pip"
+mkdir -p "$venv/cache" "$pip_cache"
+# Use .venv/cache for general cache, $HOME/.cache/pip for pip cache
+set -- --bind "$venv/cache" "$home/.cache" \
+       --bind "$pip_cache" "$home/.cache/pip" "$@"
 
 # Pass our own redacted copy of env
-for var in $(env | grep -E '^(USER|SHLVL|SHELL|TERM|LANG|LC_.*)$'); do
-    args="$args --setenv $(echo "$var" | tr '=' ' ')"
+for var in $(env | grep -E '^(USER|LOGNAME|UID|SHLVL|SHELL|TERM|LANG|LC_.*|HOSTNAME)$'); do
+    set -- --setenv "${var%%=*}" "${var#*=}" "$@"
 done
 
 set $xtrace
 
+# Quote args with spaces
 format_args () ( set +x; for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; )
 warn "exec bwrap ${0%/*}/$EXECUTABLE $(format_args "$@")"
 
-# NOTE: Pass $args last
 # shellcheck disable=SC2086
 exec bwrap \
     --dir /tmp \
@@ -245,7 +256,4 @@ exec bwrap \
     --setenv HOME "$home" \
     --setenv USER "user" \
     --setenv VIRTUAL_ENV "$venv" \
-    $args \
-    $_BWRAP_DEFAULT_ARGS \
-    ${BWRAP_ARGS:-} \
-    "${0%/*}/$EXECUTABLE" "$@"
+    "$@"

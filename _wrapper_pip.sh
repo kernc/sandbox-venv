@@ -8,11 +8,15 @@ venv="$(realpath "${0%/*}/..")"
 
 _BWRAP_DEFAULT_ARGS=
 
-BWRAP_ARGS="${BWRAP_ARGS-} $_BWRAP_DEFAULT_ARGS --bind $venv $venv" \
+BWRAP_ARGS="$_BWRAP_DEFAULT_ARGS
+${BWRAP_ARGS-}
+--bind
+$venv
+$venv" \
     "$venv/bin/.unsafe_${0##*/}" "$@"
 pip_return_status=$?
 
-# [...] Auxiliary functions get inserted here
+# AUX_FUNCS: Auxiliary functions get inserted here
 
 new_binaries="$(
     for file in "$venv/bin"/*; do

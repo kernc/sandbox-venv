@@ -63,7 +63,9 @@ collect="
 # Use separate for-loop to expand globstar.
 prev="sandbox@"
 collect="$(
+    # Split only on newline
     for path in $collect; do
+        path="$(printf '%s' "$path" | sed -r 's/^ +//;s/ +$//')"
         [ -e "$path" ] ||
             # Don't warn for globstar paths as they are allowed to not match
             case "$path" in *\**) continue ;; *) warn "Warning: missing $path"; continue ;; esac
@@ -77,39 +79,44 @@ collect="$(
         echo "$path"; prev="$path"
     done)"
 
-args=""; for path in $collect; do args="$args --ro-bind $path $path"; done
+# Begins constructing args for bwrap, in reverse
+# (later args in command line override prior ones)
+IFS='
+'  # Split args only on newline
+set -- $_BWRAP_DEFAULT_ARGS ${BWRAP_ARGS:-} "${0%/*}/$EXECUTABLE" "$@"
+
+for path in $collect; do set -- --ro-bind "$path" "$path" "$@"; done
 
 # RW-bind project dir (dir that contains .venv)
+# but RO-bind some dirs like .venv and git
 proj_dir="$(realpath "$venv/..")"
-args="$args --bind $proj_dir $proj_dir"
-
-# but RO some dirs like .venv and git
 ro_bind_pwd_extra="
     ${venv##*/}
     .git"
 for path in $ro_bind_pwd_extra; do
-    [ ! -e "$proj_dir/$path" ] || args="$args --ro-bind $proj_dir/$path $proj_dir/$path"
+    [ ! -e "$proj_dir/$path" ] || set -- --ro-bind "$proj_dir/$path" "$proj_dir/$path" "$@"
 done
+set -- --bind "$proj_dir" "$proj_dir" "$@"
 
 # RW bind cache dir for downloads etc.
 home="${HOME:-"/home/$USER"}"
 pip_cache="$home/.cache/pip"
-mkdir -p "$venv/cache"
-mkdir -p "$pip_cache"
-args="$args --bind $venv/cache $home/.cache"
-args="$args --bind $pip_cache $home/.cache/pip"
+mkdir -p "$venv/cache" "$pip_cache"
+# Use .venv/cache for general cache, $HOME/.cache/pip for pip cache
+set -- --bind "$venv/cache" "$home/.cache" \
+       --bind "$pip_cache" "$home/.cache/pip" "$@"
 
 # Pass our own redacted copy of env
-for var in $(env | grep -E '^(USER|SHLVL|SHELL|TERM|LANG|LC_.*)$'); do
-    args="$args --setenv $(echo "$var" | tr '=' ' ')"
+for var in $(env | grep -E '^(USER|LOGNAME|UID|SHLVL|SHELL|TERM|LANG|LC_.*|HOSTNAME)$'); do
+    set -- --setenv "${var%%=*}" "${var#*=}" "$@"
 done
 
 set $xtrace
 
+# Quote args with spaces
 format_args () ( set +x; for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; )
-warn "exec bwrap ${0%/*}/$EXECUTABLE $(format_args "$@")"
+warn "exec bwrap [...] $(format_args "$@")"
 
-# NOTE: Pass $args last
 # shellcheck disable=SC2086
 exec bwrap \
     --dir /tmp \
@@ -127,7 +134,4 @@ exec bwrap \
     --setenv HOME "$home" \
     --setenv USER "user" \
     --setenv VIRTUAL_ENV "$venv" \
-    $args \
-    $_BWRAP_DEFAULT_ARGS \
-    ${BWRAP_ARGS:-} \
-    "${0%/*}/$EXECUTABLE" "$@"
+    "$@"
