@@ -79,11 +79,19 @@ collect="$(
         echo "$path"; prev="$path"
     done)"
 
+split_args_by_lf () {
+    lf='
+'
+    printf '%s' "$1" | case "$1" in *$lf*) cat ;; *) tr ' ' '\n' ;; esac; }
+
 # Begins constructing args for bwrap, in reverse
 # (later args in command line override prior ones)
 IFS='
 '  # Split args only on newline
-set -- $_BWRAP_DEFAULT_ARGS ${BWRAP_ARGS:-} "${0%/*}/$EXECUTABLE" "$@"
+# shellcheck disable=SC2046
+set -- $(split_args_by_lf "$_BWRAP_DEFAULT_ARGS") \
+       $(split_args_by_lf "${BWRAP_ARGS:-}") \
+       "${0%/*}/$EXECUTABLE" "$@"
 
 for path in $collect; do set -- --ro-bind "$path" "$path" "$@"; done
 

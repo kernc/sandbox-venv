@@ -38,7 +38,10 @@ extract_segment () {
 wrap_pip () {
     out="$1"; shift
     extract_segment 1 "$@" > "$out"
-    printf '%s\n%s\n' "$(export_func is_python_shebang)" "$(export_func is_already_wrapped)" |
+    printf '%s\n%s\n%s\n' \
+            "$(export_func split_args_by_lf)" \
+            "$(export_func is_python_shebang)" \
+            "$(export_func is_already_wrapped)" |
         sed -i -E '/^# AUX_FUNCS.*/{
             r /dev/stdin
             d}' "$out"
