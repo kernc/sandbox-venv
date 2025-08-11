@@ -24,7 +24,8 @@ jobs:
           # sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=1
           # sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
       - run: sudo apt-get install --no-install-recommends bubblewrap
-      - run: bash ./smoke-test.sh
+      - run: bash tests/smoke-test.sh
+      - run: bash tests/test-bwrap-opts.sh
 
   workflow-keepalive:
     if: github.event_name == 'schedule'
