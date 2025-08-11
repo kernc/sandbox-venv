@@ -109,6 +109,8 @@ new_binaries="$(
 
 if [ "$new_binaries" ]; then
     # Reset shebang to the one outside the sandbox
+    for exe in $new_binaries; do sed -i "1s,/bin/.unsafe_,/bin/," "$venv/bin/$exe"; done
+
     if [ "$(command -v sandbox-venv)" ]; then
         echo "sandbox-venv: New binaries found:$new_binaries. Re-running sandbox-venv ..."
         sandbox-venv "$venv"

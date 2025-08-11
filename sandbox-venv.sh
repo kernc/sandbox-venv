@@ -25,14 +25,14 @@ this_script="$(command -v "$0")"
 
 is_python_shebang () {
     shebang_line="$(head -n1 "$1" | tr -d '\0')"
-    test "${shebang_line#\#!}" = "$(realpath "$bin/python")"
+    test "${shebang_line#\#!}" = "$(realpath "${1%/*}/python")"
 }
 is_already_wrapped () { head -n2 "$1" | grep -q '^# sandbox-venv'; }
 export_func () { awk "/^$1 \(\) {/,/^}|; }\$/" "$0"; }
 extract_segment () {
     segment="$1"; shift
     awk "/^# CUT HERE / { c++; next } c==$segment" "$this_script" |
-        sed -E -e "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|"
+        sed -E "s|^_BWRAP_DEFAULT_ARGS=.*|_BWRAP_DEFAULT_ARGS=\"$*\"|"
 }
 
 wrap_pip () {
