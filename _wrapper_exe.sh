@@ -117,11 +117,13 @@ for path in $ro_bind_pwd_extra; do
 done
 set -- --bind "$proj_dir" "$proj_dir" "$@"
 
-# RW bind cache dir for downloads etc.
+# RW bind cache dirs for downloads etc.
 home="${HOME:-"/home/$USER"}"
-pip_cache="$home/.cache/pip"
+pip_cache="$home/${XDG_CACHE_HOME:-.cache}/pip"
 mkdir -p "$venv/cache" "$pip_cache"
-# Use .venv/cache for general cache, $HOME/.cache/pip for pip cache
+mkdir -p "$venv/cache/pip" &&
+    echo "This is an artefact of Bubblewrap bind mounting. Real pip cache is in \$HOME/.cache/pip" \
+    > "$venv/cache/pip/note.txt"
 set -- --bind "$venv/cache" "$home/.cache" \
        --bind "$pip_cache" "$home/.cache/pip" "$@"
 
