@@ -33,19 +33,21 @@ for exe in $executables; do
         $(lib_deps "$exe")"
 done
 
-# Explicit Python dependencies from Firejail
-# TODO: Get lib deps from venv/lib/*.so
+# Collect lib deps from venv/lib/*.so
+root_so_lib_dirs="
+    /usr/lib/python3*/lib-dynload
+    /usr/lib64/python3*/lib-dynload"
+for exe in $(find "$venv/lib" $root_so_lib_dirs -name '*.so' 2>/dev/null || true); do
+    collect="$collect
+        $(lib_deps "$exe")"
+done
+
+# Explicit Python deps we know of
 py_libs="
     /usr/include/python3*
     /usr/lib/python3*
     /usr/lib64/python3*
-    /usr/local/lib/python3*
-    /usr/share/python3*
-    /usr/lib/*/libreadline.so*
-    /usr/lib/**/libreadline.so*
-    /usr/lib/**/libssl.so*
-    /usr/lib/**/libcrypto.so*
-    "
+    /usr/local/lib/python3*"
 ro_bind_extra="
     /etc/resolv.conf
     /usr/share/ca-certificates*
