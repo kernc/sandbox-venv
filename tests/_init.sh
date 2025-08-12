@@ -12,6 +12,7 @@ set -x
 
 PATH="$(realpath "${0%/*}")/../build:$PATH"
 LC_ALL=C
+export VERBOSE=1  # wrapper counsels this
 
 tmpdir="$(mktemp -d -t sandbox-venv_test-XXXXXXX)"
 # shellcheck disable=SC2064

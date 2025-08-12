@@ -126,6 +126,9 @@ is lost upon container termination.
 
 #### Runtime monitoring
 
+If **environment variable `VERBOSE=`** is set to a non-empty value,
+the full `bwrap` command line is emitted to stderr before execution.
+
 You can list bubblewraped processes using the command `lsns`
 or the following shell function:
 

@@ -7,6 +7,16 @@ warn () { echo "sandbox-venv/wrapper: $*" >&2; }
 
 venv="$(realpath "${0%/*}/..")"
 
+# Quote args with spaces
+format_args () {
+    for arg in "$@"; do case "$arg" in
+        $venv/*) printf "%s " "${venv##*/}/${arg#"$venv/"}" ;;
+        *\ *) printf "'%s' " "$arg" ;;
+        *) printf "%s " "$arg" ;;
+    esac; done
+}
+formatted_cmdline="python $(format_args "$@")"
+
 EXECUTABLE="${1:-/usr/bin/python3}"
 _BWRAP_DEFAULT_ARGS=
 
@@ -134,16 +144,19 @@ done
 
 set $xtrace
 
-# Quote args with spaces
-format_args () ( set +x; for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; )
-warn "exec bwrap [...] $(format_args "$@")"
+warn "exec bwrap [...] $formatted_cmdline"
+
+uid="$(id -u)"
+cwd="$(pwd)"
+
+[ ! "${VERBOSE:-${verbose:-}}" ] || set -x
 
 # shellcheck disable=SC2086
 exec bwrap \
     --dir /tmp \
-    --dir "/run/user/$(id -u)" \
-    --dir "$(pwd)" \
-    --chdir "$(pwd)" \
+    --dir "/run/user/$uid" \
+    --dir "$cwd" \
+    --chdir "$cwd" \
     --proc /proc \
     --dev /dev \
     --clearenv \
