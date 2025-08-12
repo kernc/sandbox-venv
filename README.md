@@ -58,13 +58,13 @@ There are **no dependencies other than a POSIX shell** with
 [its standard set of utilities](https://en.wikipedia.org/wiki/List_of_POSIX_commands)
 **and `bubblewrap`**.
 The installation instructions, as well as the script runtime,
-should work similarly on all relevant computing platforms,
+should work similarly on all relevant compute platforms,
 including GNU/Linux and even
 [Windos/WSL](https://learn.microsoft.com/en-us/windows/wsl/install). 🤞
 
 ```shell
-# Install required dependency, e.g.
-sudo apt install bubblewrap
+# Install required dependencies, e.g.
+sudo apt install binutils bubblewrap python3
  
 # Download the script and put it somewhere on PATH
 curl -vL 'https://bit.ly/sandbox-venv' | sudo tee /usr/local/bin/sandbox-venv

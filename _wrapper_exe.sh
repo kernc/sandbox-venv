@@ -7,17 +7,20 @@ warn () { echo "sandbox-venv/wrapper: $*" >&2; }
 
 venv="$(realpath "${0%/*}/..")"
 
-EXECUTABLE="${1:-/usr/bin/python}"
+EXECUTABLE="${1:-/usr/bin/python3}"
 _BWRAP_DEFAULT_ARGS=
 
-[ -e "$venv/bin/python" ]  # Assertion
+[ -e "$venv/bin/python3" ]  # Assertion
 
 # Expose these binaries
 executables="
-    /usr/bin/python
+    /usr/bin/python3
+
+    /usr/bin/git
+
+    /bin/bash
     /bin/env
     /bin/ls
-    /bin/bash
     /bin/sh"
 
 case $- in *x*) xtrace=-x ;; *) xtrace=+x ;; esac; set +x
@@ -48,8 +51,13 @@ py_libs="
     /usr/lib/python3*
     /usr/lib64/python3*
     /usr/local/lib/python3*"
+git_libs="
+    /usr/lib*/git-core
+"
 ro_bind_extra="
     /etc/resolv.conf
+    /usr/share/locale/
+    /usr/share/zoneinfo
     /usr/share/ca-certificates*
     /etc/pki
     /etc/ssl
@@ -59,6 +67,7 @@ ro_bind_extra="
 collect="
     $collect
     $ro_bind_extra
+    $git_libs
     $py_libs"
 
 # Filter collect, warn on non-existant paths, unique sort, cull.
@@ -140,7 +149,7 @@ exec bwrap \
     --share-net \
     --new-session \
     --die-with-parent \
-    --setenv PS1 '\u @ \h \$' \
+    --setenv PS1 '\u @ \h \$ ' \
     --setenv HOME "$home" \
     --setenv USER "user" \
     --setenv VIRTUAL_ENV "$venv" \

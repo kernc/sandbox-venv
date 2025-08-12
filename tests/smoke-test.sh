@@ -3,8 +3,6 @@ set -eu
 
 . "${0%/*}/_init.sh"
 
-/usr/bin/python -m venv .venv
-. .venv/bin/activate
 sandbox-venv .venv
 
 assert_is_sandboxed () { "$@" 2>&1 | grep -q 'sandbox-venv/wrapper: exec bwrap'; }

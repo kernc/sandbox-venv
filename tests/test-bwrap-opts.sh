@@ -3,9 +3,6 @@ set -eu
 
 . "${0%/*}/_init.sh"
 
-/usr/bin/python -m venv .venv
-. .venv/bin/activate
-
 sandbox-venv .venv --ro-bind /etc/os-release /file
 
 script='print(open("/file").read())'
