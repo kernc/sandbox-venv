@@ -138,6 +138,8 @@ list_bwrap () { lsns -u -W | { IFS= read header; echo "$header"; grep bwrap; }; 
 list_bwrap  # Function call
 ```
 
+You can run `$venv/bin/shell` to spawn **interactive shell inside the sandbox**.
+
 
 Viable alternatives
 -------------------

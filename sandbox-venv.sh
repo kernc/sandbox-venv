@@ -53,6 +53,18 @@ wrap_executable () {
     sed -i -E "s|^EXECUTABLE=.*|EXECUTABLE='${executable##*/}'|" "$out"
 }
 
+add_bin_shell () {
+    cat > "$1" <<EOF
+#!/bin/env ${1%/*}/python
+import shutil
+import subprocess
+import sys
+if __name__ == '__main__':
+    shell = shutil.which('/bin/bash') or '/bin/sh'
+    sys.exit(subprocess.run([shell, *sys.argv[1:]]).returncode)
+EOF
+}
+
 wrap_all () (
     for file in "$bin"/*; do
         # shellcheck disable=SC2015
@@ -74,6 +86,11 @@ wrap_all () (
         chmod +x "$file"
         echo "$file"
     done
+
+    file="$(realpath "$bin/shell")"
+    add_bin_shell "$file"
+    chmod +x "$file"
+    echo "$file"
 )
 
 wrap_all "$@"
