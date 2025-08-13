@@ -53,6 +53,17 @@ wrap_executable () {
     sed -i -E "s|^EXECUTABLE=.*|EXECUTABLE='${executable##*/}'|" "$out"
 }
 
+add_bin_shell () {
+    cat > "$1" <<EOF
+#!/bin/env ${1%/*}/python
+import shutil
+import subprocess
+import sys
+if __name__ == '__main__':
+    subprocess.run([shutil.which('/bin/bash') or '/bin/sh', *sys.argv[1:]])
+EOF
+}
+
 wrap_all () (
     for file in "$bin"/*; do
         # shellcheck disable=SC2015
@@ -74,6 +85,11 @@ wrap_all () (
         chmod +x "$file"
         echo "$file"
     done
+
+    file="$(realpath "$bin/shell")"
+    add_bin_shell "$file"
+    chmod +x "$file"
+    echo "$file"
 )
 
 wrap_all "$@"
@@ -104,6 +120,7 @@ pip_return_status=$?
 new_binaries="$(
     for file in "$venv/bin"/*; do
         [ -L "$file" ] || [ ! -x "$file" ] ||
+            [ "${file##*/}" = 'shell' ] ||
             is_already_wrapped "$file" ||
             is_python_shebang "$file" ||
             printf ' %s' "${file##*/}"
@@ -133,17 +150,30 @@ warn () { echo "sandbox-venv/wrapper: $*" >&2; }
 
 venv="$(realpath "${0%/*}/..")"
 
-EXECUTABLE="${1:-/usr/bin/python}"
+# Quote args with spaces
+format_args () {
+    for arg in "$@"; do case "$arg" in
+        $venv/*) printf "%s " "${venv##*/}/${arg#"$venv/"}" ;;
+        *\ *) printf "'%s' " "$arg" ;;
+        *) printf "%s " "$arg" ;;
+    esac; done
+}
+formatted_cmdline="python $(format_args "$@")"
+
+EXECUTABLE="${1:-/usr/bin/python3}"
 _BWRAP_DEFAULT_ARGS=
 
-[ -e "$venv/bin/python" ]  # Assertion
+[ -e "$venv/bin/python3" ]  # Assertion
 
 # Expose these binaries
 executables="
-    /usr/bin/python
+    /usr/bin/python3
+
+    /usr/bin/git
+
+    /bin/bash
     /bin/env
     /bin/ls
-    /bin/bash
     /bin/sh"
 
 case $- in *x*) xtrace=-x ;; *) xtrace=+x ;; esac; set +x
@@ -151,7 +181,7 @@ case $- in *x*) xtrace=-x ;; *) xtrace=+x ;; esac; set +x
 # Collect binaries' lib dependencies
 lib_deps () {
     readelf -l "$1" | awk '/interpreter/ {print $NF}' | tr -d '[]'
-    ldd "$1" | awk '/=>/ { print $3 }' | grep -E '^/'
+    ldd "$1" | awk '/=>/ { print $3 }' | { grep -E '^/' || true; }
 }
 collect="$executables"
 for exe in $executables; do
@@ -159,21 +189,28 @@ for exe in $executables; do
         $(lib_deps "$exe")"
 done
 
-# Explicit Python dependencies from Firejail
-# TODO: Get lib deps from venv/lib/*.so
+# Collect lib deps from venv/lib/*.so
+root_so_lib_dirs="
+    /usr/lib/python3*/lib-dynload
+    /usr/lib64/python3*/lib-dynload"
+for exe in $(find "$venv/lib" $root_so_lib_dirs -name '*.so' 2>/dev/null || true); do
+    collect="$collect
+        $(lib_deps "$exe")"
+done
+
+# Explicit Python deps we know of
 py_libs="
     /usr/include/python3*
     /usr/lib/python3*
     /usr/lib64/python3*
-    /usr/local/lib/python3*
-    /usr/share/python3*
-    /usr/lib/*/libreadline.so*
-    /usr/lib/**/libreadline.so*
-    /usr/lib/**/libssl.so*
-    /usr/lib/**/libcrypto.so*
-    "
+    /usr/local/lib/python3*"
+git_libs="
+    /usr/lib*/git-core
+"
 ro_bind_extra="
     /etc/resolv.conf
+    /usr/share/locale/
+    /usr/share/zoneinfo
     /usr/share/ca-certificates*
     /etc/pki
     /etc/ssl
@@ -183,6 +220,7 @@ ro_bind_extra="
 collect="
     $collect
     $ro_bind_extra
+    $git_libs
     $py_libs"
 
 # Filter collect, warn on non-existant paths, unique sort, cull.
@@ -232,11 +270,13 @@ for path in $ro_bind_pwd_extra; do
 done
 set -- --bind "$proj_dir" "$proj_dir" "$@"
 
-# RW bind cache dir for downloads etc.
+# RW bind cache dirs for downloads etc.
 home="${HOME:-"/home/$USER"}"
-pip_cache="$home/.cache/pip"
+pip_cache="$home/${XDG_CACHE_HOME:-.cache}/pip"
 mkdir -p "$venv/cache" "$pip_cache"
-# Use .venv/cache for general cache, $HOME/.cache/pip for pip cache
+mkdir -p "$venv/cache/pip" &&
+    echo "This is an artefact of Bubblewrap bind mounting. Real pip cache is in \$HOME/.cache/pip" \
+    > "$venv/cache/pip/note.txt"
 set -- --bind "$venv/cache" "$home/.cache" \
        --bind "$pip_cache" "$home/.cache/pip" "$@"
 
@@ -247,16 +287,19 @@ done
 
 set $xtrace
 
-# Quote args with spaces
-format_args () ( set +x; for arg in "$@"; do case "$arg" in *\ *) printf "'%s' " "$arg" ;; *) printf "%s " "$arg" ;; esac; done; )
-warn "exec bwrap ${0%/*}/$EXECUTABLE $(format_args "$@")"
+warn "exec bwrap [...] $formatted_cmdline"
+
+uid="$(id -u)"
+cwd="$(pwd)"
+
+[ ! "${VERBOSE:-${verbose:-}}" ] || set -x
 
 # shellcheck disable=SC2086
 exec bwrap \
     --dir /tmp \
-    --dir "/run/user/$(id -u)" \
-    --dir "$(pwd)" \
-    --chdir "$(pwd)" \
+    --dir "/run/user/$uid" \
+    --dir "$cwd" \
+    --chdir "$cwd" \
     --proc /proc \
     --dev /dev \
     --clearenv \
@@ -264,7 +307,7 @@ exec bwrap \
     --share-net \
     --new-session \
     --die-with-parent \
-    --setenv PS1 '\u @ \h \$' \
+    --setenv PS1 '\u @ \h \$ ' \
     --setenv HOME "$home" \
     --setenv USER "user" \
     --setenv VIRTUAL_ENV "$venv" \
