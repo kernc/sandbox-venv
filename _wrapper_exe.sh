@@ -138,7 +138,7 @@ set -- --bind "$venv/cache" "$home/.cache" \
        --bind "$pip_cache" "$home/.cache/pip" "$@"
 
 # Pass our own redacted copy of env
-for var in $(env | grep -E '^(USER|LOGNAME|UID|SHLVL|SHELL|TERM|LANG|LC_.*|HOSTNAME)$'); do
+for var in $(env | grep -E '^(USER|LOGNAME|UID|PATH|TERM|LANGUAGE|LANG|LC_.*?|HOSTNAME)='); do
     set -- --setenv "${var%%=*}" "${var#*=}" "$@"
 done
 
