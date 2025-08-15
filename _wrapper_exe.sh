@@ -27,11 +27,16 @@ executables="
     /usr/bin/python3
 
     /usr/bin/git
+    /usr/bin/git-receive-pack
+    /usr/bin/git-upload-archive
+    /usr/bin/git-upload-pack
 
     /bin/bash
     /bin/env
     /bin/ls
-    /bin/sh"
+    /bin/sh
+    /bin/uname
+    "
 
 case $- in *x*) xtrace=-x ;; *) xtrace=+x ;; esac; set +x
 
@@ -50,6 +55,7 @@ done
 root_so_lib_dirs="
     /usr/lib/python3*/lib-dynload
     /usr/lib64/python3*/lib-dynload"
+# XXX: If some `git` tools are failing, add $(find /usr/lib/git-core -type f)
 for exe in $(find "$venv/lib" $root_so_lib_dirs -name '*.so' 2>/dev/null || true); do
     collect="$collect
         $(lib_deps "$exe")"
@@ -65,9 +71,14 @@ git_libs="
     /usr/lib*/git-core
 "
 ro_bind_extra="
+    /etc/hosts
     /etc/resolv.conf
-    /usr/share/locale/
+
+    /etc/ld.so.cache
+    /etc/os-release
+    /usr/share/locale
     /usr/share/zoneinfo
+
     /usr/share/ca-certificates*
     /etc/pki
     /etc/ssl
