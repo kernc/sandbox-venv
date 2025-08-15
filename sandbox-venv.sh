@@ -4,6 +4,8 @@
 # Also re‑wrap any new scripts post installation by pip etc.
 # shellcheck disable=SC2317
 set -eu
+# shellcheck disable=SC3040
+case "$(set -o)" in *pipefail*) set -o pipefail ;; esac
 
 for arg; do case "$arg" in -h|-\?|--help) echo "Usage: ${0##*/} [VENV_DIR] [BWRAP_OPTS]    # Dir defaults to .venv"; exit ;; esac; done
 

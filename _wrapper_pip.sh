@@ -2,6 +2,8 @@
 # sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
 # pip wrapper: Re-run sandbox-venv after every pip installation
 set -u
+# shellcheck disable=SC3040
+case "$(set -o)" in *pipefail*) set -o pipefail ;; esac
 alias realpath='realpath --no-symlinks'
 
 venv="$(realpath "${0%/*}/..")"

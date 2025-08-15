@@ -1,7 +1,8 @@
 #!/bin/sh
 # sandbox-venv: Secure container sandbox venv wrapper (GENERATED CODE)
 set -eu
-
+# shellcheck disable=SC3040
+case "$(set -o)" in *pipefail*) set -o pipefail ;; esac
 alias realpath='realpath --no-symlinks'
 warn () { echo "sandbox-venv/wrapper: $*" >&2; }
 
